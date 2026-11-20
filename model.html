@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3D model fasade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: radni, precizan, kao građevinski crtež
+   IDEA: maketa objekta na stolu projektanta
+   PICTURE: sam 3D model preko celog ekrana
+   COLOUR and TYPE: beton siva, opeka, crni okviri; Inter Tight + Inter
+   LAYOUT: model zauzima ekran, tanka traka sa pogledima, panel sa info o elementu */
+:root{color-scheme:light dark;--bg:light-dark(#e9ecee,#15181b);--ink:light-dark(#14171a,#eef1f3);--panel:light-dark(#ffffffee,#202428ee);--line:light-dark(#cdd3d8,#353b41);--acc:#e8251a}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+header{position:fixed;top:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;pointer-events:none}
+h1{font:700 18px/1.1 "Inter Tight",sans-serif;margin:0 12px 0 4px;pointer-events:auto}
+.views{display:flex;flex-wrap:wrap;gap:6px;pointer-events:auto}
+button{font:500 14px Inter,sans-serif;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--ink)}
+button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#info{position:fixed;left:12px;bottom:12px;max-width:min(360px,calc(100% - 24px));background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;backdrop-filter:blur(6px)}
+#info b{font:700 15px "Inter Tight",sans-serif;display:block;margin-bottom:2px}
+#info .k{color:light-dark(#5b646c,#9aa4ad);font-size:13px}
+details{position:fixed;right:12px;bottom:12px;max-width:min(380px,calc(100% - 24px));max-height:60vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px}
+summary{cursor:pointer;font-weight:500;min-height:28px}
+details ul{padding-left:18px;margin:6px 0}
+@media(max-width:600px){h1{width:100%}details{bottom:auto;top:110px}#info{font-size:13px}}
+#spec{right:12px;bottom:auto;top:64px;max-width:min(400px,calc(100% - 24px))}
+table{border-collapse:collapse;width:100%;margin:6px 0}th,td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.n{text-align:right}
+#spec p{margin:6px 0;white-space:normal}
+@media(max-width:600px){#spec{top:auto;bottom:12px}#spec:not([open]){max-width:60%}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<header>
+  <h1>3D model fasade</h1>
+  <div class="views" id="views">
+    <button data-v="iso" class="on">3D</button>
+    <button data-v="front">Spreda</button>
+    <button data-v="right">Desno</button>
+    <button data-v="left">Levo</button>
+    <button data-v="back">Pozadi</button>
+    <button data-v="top">Odozgo</button>
+    <button id="tgl">Kote prozora</button>
+    <button id="tglm" class="on">Lajsne</button>
+  </div>
+  <div class="views" id="pal">
+    <button data-p="0">Peščana</button>
+    <button data-p="1" class="on">Greige</button>
+    <button data-p="2">Svetla + kamen</button>
+  </div>
+</header>
+<div id="info"><b>Dodirni prozor, vrata ili zid</b><span class="k">Rotiranje: prevuci · Zum: točkić / dva prsta · Pomeranje: desni klik / tri prsta. Mere u cm.</span></div>
+<details id="spec">
+  <summary>Specifikacija lajsni – front i bokovi</summary>
+  <table>
+    <thead><tr><th>Model</th><th>Mera</th><th class="n">Neto</th><th class="n">Porudžbina</th></tr></thead>
+    <tbody id="bom"></tbody>
+  </table>
+  <p><b>YPP-9:</b> gornja ivica u ravni sa vrhom atike; donja atika – front, trem i oba boka sa skokom; gornja atika – front i oba boka; povrat 45 cm na zadnju stranu; uglovi na gerung.<br>
+  <b>Y-ploča 4:</b> svi spoljni uglovi fronta i bokova (levo skok, desno ispust) kao stubovi (lice 79 + povrat 70 cm, 22 reda) + oba stuba sa 4 strane, u kontinuitetu.<br>
+  <b>YP-3:</b> front – okviri oko levog i desnog para prozora; levi bok – okvir oko para napred, oko gornjeg prozora uz skok i oko para pozadi; desni bok – okvir oko para napred, oko malih prozora na ispustu i oko para pozadi.<br>
+  <b>YZ-37:</b> panel sa reljefom akantusa, centriran između donjeg i gornjeg prozora u svakom paru (front 2, levi bok 2, desni bok 2; + 1 između malih prozora na ispustu desno).<br>
+  Porudžbina = cele šipke od 2 m, sečenje optimizovano; za YPP-9 i YP-3 dodati rezervu za gerung.</p>
+</details>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+{
+/* ===== MERE (cm) – sve izmene ovde ===== */
+const H1=335, H2=331, TOP=H1+H2, RS=65, OV=35, W=1296, D=1052, SL=H1-20, INS=10; // INS = termoizolacija; SL = donja ivica međuspratne ploče
+const BLOCKS=[ // [ime, x0,x1, z0,z1]  (z=0 je prednja fasada, raste ka zadnjoj)
+  ['Glavni objekat',0,W,0,D],
+  ['Levi zadnji deo (isturen 105)',-105,0,566,D],
+  ['Desni srednji ispust',W,W+103,325,607]
+];
+const PH={x0:W/2-380.5,x1:W/2+380.5,z0:300,z1:988,y0:TOP+RS,h:250,slab:65,ov:35};
+// otvori: [fasada, normala, ravan, od, širina, donja ivica(apsolutno od tla), visina, vrsta]
+const OP=[
+  ['Spreda – levi blok, prizemlje','-z',0,180,108,70,240,'p'],
+  ['Spreda – levi blok, sprat','-z',0,180,108,H1+72,243,'p'],
+  ['Spreda – ulazna vrata','-z',0,W/2-145,290,0,SL,'v'],
+  ['Spreda – desno, prizemlje','-z',0,W-288,108,70,240,'p'],
+  ['Spreda – balkonska vrata','-z',0,W/2-145,290,H1+10,TOP-H1-10,'v'],
+  ['Spreda – desno, sprat','-z',0,W-288,108,H1+72,243,'p'],
+  // desna strana (fotografija 2): 325 + ispust 282 (103 napolje) + 445
+  ['Desno – prednji deo, prizemlje','+x',W,110,108,72,SL-72,'p'],
+  ['Desno – prednji deo, sprat','+x',W,110,108,H1+72,243,'p'],
+  ['Desno – ispust, mali prozor P','+x',W+103,429,78,SL-120,120,'p'],
+  ['Desno – ispust, mali prozor S','+x',W+103,429,78,H1+72+243-156,156,'p'],
+  ['Desno – zadnji deo, prizemlje','+x',W,764,108,72,SL-72,'p'],
+  ['Desno – zadnji deo, sprat','+x',W,764,108,H1+72,243,'p'],
+  // leva strana (fotografija 3): prednji deo 566, zadnji deo isturen 105
+  ['Levo – prednji deo, prizemlje','-x',0,110,108,70,SL-70,'p'],
+  ['Levo – prednji deo, sprat 1','-x',0,110,108,H1+72,243,'p'],
+  ['Levo – prednji deo, sprat 2','-x',0,383,108,H1+72,243,'p'],
+  ['Levo – zadnji deo, prizemlje','-x',-105,D-280,100,70,SL-70,'p'],
+  ['Levo – zadnji deo, sprat','-x',-105,D-280,100,H1+72,243,'p'],
+  ['Krov – nadgradnja, prozor levo','-z',PH.z0,PH.x0+120,108,PH.y0+40,192,'p'],
+  ['Krov – nadgradnja, vrata','-z',PH.z0,PH.x0+282,116,PH.y0,230,'v'],
+  ['Krov – nadgradnja, prozor desno','-z',PH.z0,PH.x0+453,108,PH.y0+40,192,'p'],
+  ['Krov – nadgradnja, bočni desni','+x',PH.x1,740,108,PH.y0+40,192,'p'],
+  ['Krov – nadgradnja, bočni levi','-x',PH.x0,PH.z1-140-108,108,PH.y0+40,192,'p']
+];
+
+/* ===== SCENA ===== */
+const cv=document.getElementById('c');
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+R.setPixelRatio(Math.min(devicePixelRatio,2));R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
+const S=new THREE.Scene();S.background=new THREE.Color(0xdfe6ec);
+const cam=new THREE.PerspectiveCamera(40,1,10,40000);
+const ctl=new THREE.OrbitControls(cam,cv);ctl.enableDamping=true;ctl.maxPolarAngle=Math.PI*0.495;
+S.add(new THREE.HemisphereLight(0xffffff,0x8a7f70,0.75));
+const sun=new THREE.DirectionalLight(0xffffff,0.85);sun.position.set(2600,3600,2200);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-0.0004;sun.shadow.normalBias=2;Object.assign(sun.shadow.camera,{left:-2000,right:2000,top:2000,bottom:-2000,near:100,far:9000});
+sun.target.position.set(700,0,-700);S.add(sun,sun.target);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(12000,12000),new THREE.MeshStandardMaterial({color:0xb8ad9c,roughness:1}));
+ground.rotation.x=-Math.PI/2;ground.position.y=-1;ground.receiveShadow=true;S.add(ground);
+
+const root=new THREE.Group();root.scale.z=-1;S.add(root); // prednja fasada gleda ka +z u sceni
+const M={
+  ets:new THREE.MeshStandardMaterial({color:0xc8c1b5,roughness:.95}),
+  brick:new THREE.MeshStandardMaterial({color:0xc9673f,roughness:.9}),
+  conc:new THREE.MeshStandardMaterial({color:0xa9adb0,roughness:.95}),
+  memb:new THREE.MeshStandardMaterial({color:0xeef0f0,roughness:.7}),
+  frame:new THREE.MeshStandardMaterial({color:0x2c3034,roughness:.5}),
+  glass:new THREE.MeshStandardMaterial({color:0x5d7487,roughness:.15,metalness:.4}),
+  hi:new THREE.MeshStandardMaterial({color:0xe8251a,roughness:.5})
+};
+const edgeMat=new THREE.LineBasicMaterial({color:0x2a2a2a,transparent:true,opacity:.35});
+const pick=[];
+function box(x0,x1,y0,y1,z0,z1,mat,info,edges=true){
+  const g=new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0);
+  const m=new THREE.Mesh(g,mat);m.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2);
+  m.castShadow=m.receiveShadow=true;root.add(m);
+  if(edges){const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),edgeMat);m.add(e);}
+  if(info){m.userData.info=info;pick.push(m);}
+  return m;
+}
+
+/* zidovi + termoizolacija (INS cm), krov */
+BLOCKS.forEach(([n,x0,x1,z0,z1])=>{
+  const w=x1-x0,d=z1-z0;
+  box(x0-INS,x1+INS,0,TOP,z0-INS,z1+INS,M.ets,{t:n,d:`zid ${w} × ${d} cm, sa izolacijom ${w+2*INS} × ${d+2*INS} cm, visina ${TOP} cm`});
+  box(x0-OV-INS,x1+OV+INS,TOP,TOP+RS,z0-OV-INS,z1+OV+INS,M.ets,{t:'Krovna ploča – '+n,d:`debljina ${RS}, prepust ${OV} + izolacija ${INS} cm`});
+  box(x0-OV+8,x1+OV-8,TOP+RS,TOP+RS+2,z0-OV+8,z1+OV-8,M.memb,null,false);
+});
+
+/* trem sa stubovima */
+const PX0=W/2-345,PX1=W/2+345,CS=70,CI=45; // trem centriran na osu fasade; stubovi 70×70, uvučeni CI cm od ivice ploča
+box(PX0-INS,PX1+INS,0,15,-390,0,M.conc,{t:'Plato ulaza',d:'procena'});
+const BX0=PX0-INS+CI-4,BX1=PX1+INS-CI+4,BZ=-320-INS+CI-4; // ploča u ravni sa obloženim stubovima
+box(BX0,BX1,SL-INS,H1+10,BZ,0,M.ets,{t:'Ploča terase sprata',d:`${BX1-BX0} × ${-BZ} cm, u ravni sa stubovima`});
+box(PX0-INS,PX1+INS,TOP,TOP+RS,-345-INS,0,M.ets,{t:'Ploča nad terasom',d:`${PX1-PX0+2*INS} × ${345+INS} cm sa izolacijom`});
+box(PX0-INS+CI,PX0-INS+CI+CS,0,TOP,-320-INS+CI,-320-INS+CI+CS,M.ets,{t:'Stub levi',d:`${CS} × ${CS} cm`});
+box(PX1+INS-CI-CS,PX1+INS-CI,0,TOP,-320-INS+CI,-320-INS+CI+CS,M.ets,{t:'Stub desni',d:`${CS} × ${CS} cm`});
+
+box(PX0-INS+6,PX1+INS-6,TOP+RS,TOP+RS+2,-345-INS+6,-6,M.memb,null,false); // membrana trem
+box(BX0+2,BX1-2,H1+10,H1+13,BZ+2,-2,M.conc,null,false); // pod terase
+/* nadgradnja na krovu */
+box(PH.x0-INS,PH.x1+INS,PH.y0,PH.y0+PH.h,PH.z0-INS,PH.z1+INS,M.ets,{t:'Nadgradnja na krovu',d:`zid ${PH.x1-PH.x0} × ${PH.z1-PH.z0} cm, sa izolacijom ${PH.x1-PH.x0+2*INS} × ${PH.z1-PH.z0+2*INS}, visina ${PH.h} cm`});
+box(PH.x0-PH.ov-INS,PH.x1+PH.ov+INS,PH.y0+PH.h,PH.y0+PH.h+PH.slab,PH.z0-PH.ov-INS,PH.z1+PH.ov+INS,M.ets,{t:'Krov nadgradnje',d:`ploča ${PH.slab}, prepust ${PH.ov} + izolacija ${INS} cm`});
+box(PH.x0-PH.ov-INS+6,PH.x1+PH.ov+INS-6,PH.y0+PH.h+PH.slab,PH.y0+PH.h+PH.slab+2,PH.z0-PH.ov-INS+6,PH.z1+PH.ov+INS-6,M.memb,null,false);
+
+/* otvori */
+const T=6,IN=7;
+const labels=[];
+OP.forEach(([n,nr,at0,u0,w,y0,h,k])=>{
+  const s=nr[0]==='-'?-1:1, ax=nr[1];
+  const at=at0+s*INS;
+  const inf={t:n,d:`${k==='v'?'Vrata':'Prozor'} ${w} × ${h} cm · donja ivica ${y0>=H1?(y0>=PH.y0?y0-PH.y0+' od krova':y0-H1+' od poda sprata'):y0+' od tla'}`};
+  const p=(a,b,t1,t2)=> ax==='z' ? [a,b,y0,y0+h,at+s*t1,at+s*t2] : [at+s*t1,at+s*t2,y0,y0+h,a,b];
+  const f=p(u0,u0+w,0,T); f[0]=Math.min(f[0],f[1]);
+  const fr=ax==='z'?box(u0,u0+w,y0,y0+h,Math.min(at,at+s*T),Math.max(at,at+s*T),M.frame,inf)
+                   :box(Math.min(at,at+s*T),Math.max(at,at+s*T),y0,y0+h,u0,u0+w,M.frame,inf);
+  const gy0=y0+IN,gy1=y0+h-IN, gt=at+s*(T+1);
+  const g=ax==='z'?box(u0+IN,u0+w-IN,gy0,gy1,Math.min(at,gt),Math.max(at,gt),M.glass,inf,false)
+                  :box(Math.min(at,gt),Math.max(at,gt),gy0,gy1,u0+IN,u0+w-IN,M.glass,inf,false);
+  if(k==='p'){const st=at+s*14;
+    ax==='z'?box(u0-3,u0+w+3,y0-4,y0,Math.min(at,st),Math.max(at,st),M.frame,null,false)
+            :box(Math.min(at,st),Math.max(at,st),y0-4,y0,u0-3,u0+w+3,M.frame,null,false);}
+  // oznaka mere
+  const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');
+  x.fillStyle='rgba(255,255,255,.92)';x.fillRect(0,0,256,64);x.fillStyle='#14171a';x.font='600 34px Inter, sans-serif';
+  x.textAlign='center';x.textBaseline='middle';x.fillText(`${w}×${h}`,128,33);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false}));
+  sp.scale.set(90,22.5,1);
+  const off=at+s*40;
+  ax==='z'?sp.position.set(u0+w/2,y0+h/2,off):sp.position.set(off,y0+h/2,u0+w/2);
+  sp.visible=false;sp.renderOrder=10;root.add(sp);labels.push(sp);
+});
+
+
+/* ===== LAJSNE YUM COMMERCE ===== */
+const molds=new THREE.Group();root.add(molds);
+const BOM={};const bom=(k,l)=>(BOM[k]=BOM[k]||[]).push(l);
+M.mold=new THREE.MeshStandardMaterial({color:0xf5f2ec,roughness:.85});
+function mbox(x0,x1,y0,y1,z0,z1,info,ed=true){
+  const g=new THREE.BoxGeometry(Math.abs(x1-x0),y1-y0,Math.abs(z1-z0));
+  const m=new THREE.Mesh(g,M.mold);m.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2);
+  m.castShadow=m.receiveShadow=true;if(ed)m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g),edgeMat));
+  if(info){m.userData.info=info;pick.push(m);}molds.add(m);return m;
+}
+// traka na ravni lica: ax='z' -> u ide po x; ax='x' -> u ide po z; s = smer napolje
+function strip(ax,at,s,u0,u1,y0,y1,d,info,ed=true){
+  const a=at,b=at+s*d;
+  return ax==='z'?mbox(u0,u1,y0,y1,Math.min(a,b),Math.max(a,b),info,ed):mbox(Math.min(a,b),Math.max(a,b),y0,y1,u0,u1,info,ed);
+}
+// YPP-9: 45 × 10 cm – izvučen profil po obimu atike, uglovi sečeni pod 45° (gerung)
+const YPP9=(()=>{const C=[[0,0],[2.5,0],[2.5,2],[4.6,2],[4.6,5],[5.7,5],[5.7,8],[4,8],[4,14],[4.6,14],[4.6,18]];
+  for(let i=1;i<=14;i++){const t=i/14;C.push([4.6+5.4*(1-Math.sqrt(1-t*t)),18+27*t]);}C.push([0,45]);return C;})(); // katalog: 45 cm, dno 5,7 cm, konkavni venac do 10 cm
+const MM=new THREE.MeshStandardMaterial({color:0xf5f2ec,roughness:.85,side:THREE.DoubleSide});
+function offsetLine(P,N,d){return P.map((p,i)=>{
+  if(i===0)return [p[0]+N[0][0]*d,p[1]+N[0][1]*d];
+  if(i===P.length-1)return [p[0]+N[i-1][0]*d,p[1]+N[i-1][1]*d];
+  const a=N[i-1],b=N[i],k=1+a[0]*b[0]+a[1]*b[1];
+  return [p[0]+(a[0]+b[0])/k*d,p[1]+(a[1]+b[1])/k*d];});}
+function sweep(P,yb,prof,info){
+  // P: tačke osnove [x,z]; prof: kontura preseka [[d,y],...] od zida, odozdo nagore, nazad do zida
+  const N=[];for(let i=0;i<P.length-1;i++){const dx=P[i+1][0]-P[i][0],dz=P[i+1][1]-P[i][1],L=Math.hypot(dx,dz);N.push([-dz/L,dx/L]);}
+  {const O=offsetLine(P,N,10);for(let i=0;i<P.length-1;i++)bom('YPP-9',Math.hypot(O[i+1][0]-O[i][0],O[i+1][1]-O[i][1]));}
+  const v=[];const q=(a,b,c,d)=>v.push(...a,...b,...c,...a,...c,...d);
+  const L=prof.map(([d])=>offsetLine(P,N,d));
+  for(let j=0;j<prof.length;j++){const j2=(j+1)%prof.length,y0=yb+prof[j][1],y1=yb+prof[j2][1];
+    for(let i=0;i<P.length-1;i++)q([L[j][i][0],y0,L[j][i][1]],[L[j][i+1][0],y0,L[j][i+1][1]],[L[j2][i+1][0],y1,L[j2][i+1][1]],[L[j2][i][0],y1,L[j2][i][1]]);}
+  const tri=THREE.ShapeUtils.triangulateShape(prof.map(([d,y])=>new THREE.Vector2(d,y)),[]);
+  [0,P.length-1].forEach(i=>tri.forEach(t=>t.forEach(k=>v.push(L[k][i][0],yb+prof[k][1],L[k][i][1]))));
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.computeVertexNormals();
+  const m=new THREE.Mesh(g,MM);m.castShadow=m.receiveShadow=true;m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g,35),edgeMat));
+  m.userData.info=info;pick.push(m);molds.add(m);
+}
+const AT=TOP, ZF=-(OV+INS), PZ=-345-INS, PL=PX0-INS, PR=PX1+INS, XL=-(OV+INS), XR=W+OV+INS, RET=45;
+const XL2=-105-OV-INS, XRM=W+103+OV+INS, ZM0=325-OV-INS, ZM1=607+OV+INS, Z2=566-OV-INS, ZB=D+OV+INS;
+const yTop=yb=>yb+65-45; // gornja ivica profila u ravni gornje ivice atike
+// donja atika: povrat na zadnjoj – desni bok (sa skokom) – front i trem – levi bok (sa skokom) – povrat na zadnjoj
+sweep([[XR-RET,ZB],[XR,ZB],[XR,ZM1],[XRM,ZM1],[XRM,ZM0],[XR,ZM0],[XR,ZF],[PR,ZF],[PR,PZ],[PL,PZ],[PL,ZF],[XL,ZF],[XL,Z2],[XL2,Z2],[XL2,ZB],[XL2+RET,ZB]],
+  yTop(AT),YPP9,{t:'YPP-9 – donja atika',d:'profil 45 × 10 cm: front, trem, levi bok sa skokom, desni bok sa ispustom; povrat 45 cm na zadnju stranu; uglovi na gerung'});
+const UX0=PH.x0-PH.ov-INS,UX1=PH.x1+PH.ov+INS,UZ=PH.z0-PH.ov-INS,UZB=PH.z1+PH.ov+INS;
+sweep([[UX1-RET,UZB],[UX1,UZB],[UX1,UZ],[UX0,UZ],[UX0,UZB],[UX0+RET,UZB]],yTop(PH.y0+PH.h),YPP9,{t:'YPP-9 – gornja atika (nadgradnja)',d:'profil 45 × 10 cm: front i oba boka, povrat 45 cm na zadnju stranu, uglovi na gerung'});
+
+// Y-ploča 4: 31.5 × 4.5 cm, slaže se horizontalno u redove (fuga između redova)
+const YP=31.5,YT=4.5;
+function yploca(ax,at,s,u0,u1,y0,y1,pos){const inf={t:'Y-ploča 4 – '+pos,d:`ploča 31.5 × 4.5 cm, širina ${Math.round(u1-u0)} cm, visina ${Math.round(y1-y0)} cm`};
+  for(let y=y0;y<y1-0.5;y+=YP){const t=Math.min(y+YP,y1);bom('Y-ploča 4',u1-u0);
+    const h=t-y;if(h<5){strip(ax,at,s,u0,u1,y,t,YT,inf);continue;}
+    strip(ax,at,s,u0,u1,y,t-4,YT,inf);
+    strip(ax,at,s,u0,u1,t-4,t-3.3,3.6,inf,false);strip(ax,at,s,u0,u1,t-3.3,t-1.7,2.7,inf,false);strip(ax,at,s,u0,u1,t-1.7,t-1,3.6,inf,false);
+    strip(ax,at,s,u0,u1,t-1,t,YT,inf);}}
+const PW=CS+2*YT; // 79 cm lice + 70 cm povrat, kao na stubovima
+// uglovi – front
+yploca('z',-INS,-1,-INS-YT,-INS-YT+PW,0,TOP,'levi prednji ugao (front)');
+yploca('x',-INS,-1,-INS,-INS+CS,0,TOP,'levi prednji ugao (bok)');
+yploca('z',-INS,-1,W+INS+YT-PW,W+INS+YT,0,TOP,'desni prednji ugao (front)');
+yploca('x',W+INS,1,-INS,-INS+CS,0,TOP,'desni prednji ugao (bok)');
+// uglovi – bočne strane (skok 105 i zadnji ugao), levo i ogledalno desno
+const FX=566-INS, BZ2=D+INS, LX=-105-INS, RX=W+INS, RM=W+103+INS, M0=325-INS, M1=607+INS;
+yploca('x',LX,-1,FX-YT,FX-YT+PW,0,TOP,'levi bok – ugao na skoku');
+yploca('z',FX,-1,LX,LX+CS,0,TOP,'levi bok – ugao na skoku (čelo)');
+yploca('x',LX,-1,BZ2+YT-PW,BZ2+YT,0,TOP,'levi bok – zadnji ugao');
+yploca('z',BZ2,1,LX,LX+CS,0,TOP,'levi bok – zadnji ugao (povrat)');
+yploca('x',RM,1,M0-YT,M0-YT+PW,0,TOP,'desni bok – ispust, prednji ugao');
+yploca('z',M0,-1,RM-CS,RM,0,TOP,'desni bok – ispust, prednji ugao (čelo)');
+yploca('x',RM,1,M1+YT-PW,M1+YT,0,TOP,'desni bok – ispust, zadnji ugao');
+yploca('z',M1,1,RM-CS,RM,0,TOP,'desni bok – ispust, zadnji ugao (čelo)');
+yploca('x',RX,1,BZ2+YT-PW,BZ2+YT,0,TOP,'desni bok – zadnji ugao');
+yploca('z',BZ2,1,RX-CS,RX,0,TOP,'desni bok – zadnji ugao (povrat)');
+// stubovi – obloženi Y-pločom 4 sa sve četiri strane, u kontinuitetu
+[[PX0-INS+CI,'levi stub'],[PX1+INS-CI-CS,'desni stub']].forEach(([cx,nm])=>{
+  const x0=cx,x1=cx+CS,z0=-320-INS+CI,z1=z0+CS;
+  yploca('z',z0,-1,x0-YT,x1+YT,0,TOP,nm);yploca('z',z1,1,x0-YT,x1+YT,0,TOP,nm);
+  yploca('x',x0,-1,z0,z1,0,TOP,nm);yploca('x',x1,1,z0,z1,0,TOP,nm);
+});
+
+// YP-3: 15 × 7.5 cm – okviri prozora i vrata; venac (7.5 cm) na spoljnoj ivici, prema katalogu
+const KW=15, KD=7.5;
+const YP3=[[0,1.5,4],[1.5,7,4.8],[7,10.5,4.4],[10.5,11.5,5.2],[11.5,12.2,6.3],[12.2,15,7.5]]; // [od,do (cm od unutrašnje ivice), dubina]
+function yk11(ax,at,s,u0,u1,y0,y1,pos){const inf={t:'YP-3 – '+pos,d:`profil 15 × 7.5 cm, okvir ${u1-u0+2*KW} × ${y1-y0+2*KW} cm`};
+  YP3.forEach(([a,b,d])=>{
+    strip(ax,at,s,u0-b,u0-a,y0-b,y1+b,d,inf);strip(ax,at,s,u1+a,u1+b,y0-b,y1+b,d,inf);
+    strip(ax,at,s,u0-b,u1+b,y1+a,y1+b,d,inf);strip(ax,at,s,u0-b,u1+b,y0-b,y0-a,d,inf);});
+  [y1-y0+2*KW,y1-y0+2*KW,u1-u0+2*KW,u1-u0+2*KW].forEach(l=>bom('YP-3',l));}
+function yp3door(x0,x1,y0,y1,nm){const inf={t:'YP-3 – '+nm,d:`dve vertikale po ${y1-y0} cm`};bom('YP-3',y1-y0);bom('YP-3',y1-y0);
+  YP3.forEach(([a,b,d])=>{strip('z',-INS,-1,x0-b,x0-a,y0,y1,d,inf);strip('z',-INS,-1,x1+a,x1+b,y0,y1,d,inf);});}
+// YZ-37: 100 × 53 × 5 – dekorativni panel, centriran između donjeg i gornjeg prozora
+const SPH=new THREE.SphereGeometry(1,10,8);
+function yz34(ax,at,s,cu,cy,pos){const inf={t:'YZ-37 – '+pos,d:'dekorativni panel sa reljefom akantusa 100 × 53 × 5 cm'};
+  const g=new THREE.Group();molds.add(g);
+  const P=(u,y,d)=>ax==='z'?[cu+u,cy+y,at+s*d]:[at+s*d,cy+y,cu+u];
+  const blob=(u,y,d,rx,ry,rz,ang=0)=>{const m=new THREE.Mesh(SPH,M.mold);m.position.set(...P(u,y,d));
+    if(ax==='z'){m.scale.set(rx,ry,rz);m.rotation.z=ang;}else{m.scale.set(rz,ry,rx);m.rotation.x=-ang;}
+    m.castShadow=true;m.userData.info=inf;pick.push(m);g.add(m);};
+  // ploča + profilisani okvir
+  strip(ax,at,s,cu-50,cu+50,cy-26.5,cy+26.5,2.5,inf);
+  strip(ax,at,s,cu-50,cu+50,cy+21.5,cy+26.5,4,inf);strip(ax,at,s,cu-50,cu+50,cy-26.5,cy-21.5,4,inf);
+  strip(ax,at,s,cu-50,cu-45,cy-21.5,cy+21.5,4,inf);strip(ax,at,s,cu+45,cu+50,cy-21.5,cy+21.5,4,inf);
+  // reljef: simetrične akantus volute
+  blob(0,13,3.5,2.6,2.6,1.5);blob(0,2,3.2,2.2,9,1.4);
+  [-1,1].forEach(sg=>{
+    for(let k=0;k<7;k++){const a=Math.PI*(0.15+k*0.17),r=12;blob(sg*(14+Math.cos(a)*r*0.9),Math.sin(a)*r*0.9-1,3.4,4.2,1.8,1.6,sg*(a+1.4));}
+    blob(sg*14,-1,4,3.5,3.5,1.5);
+    for(let k=0;k<4;k++)blob(sg*(31+k*3),8-k*5,3,4,2,1.4,sg*(0.8-k*0.5));
+    for(let k=0;k<4;k++)blob(sg*(28+k*3.5),-10-k*1.5,3,4.2,1.8,1.4,sg*(-0.4-k*0.2));
+    blob(sg*6,-15,3,5,1.8,1.4,sg*0.3);});
+  bom('YZ-37',1);}
+const UP=H1+72+243, CY=(70+240+H1+72)/2;
+// front
+yk11('z',-INS,-1,180,288,70,UP,'front – levi par prozora');yz34('z',-INS,-1,234,CY,'front – levo');
+yk11('z',-INS,-1,W-288,W-180,70,UP,'front – desni par prozora');yz34('z',-INS,-1,W-234,CY,'front – desno');
+// vrata bez okvira (po dogovoru)
+// levi bok
+[['levi bok',-INS,LX,-1]].forEach(([nm,fa,ra,s])=>{
+  yk11('x',fa,s,110,218,70,UP,nm+' – par prozora napred');yz34('x',fa,s,164,CY,nm+' – napred');
+  yk11('x',fa,s,383,491,H1+72,UP,nm+' – gornji prozor uz skok');
+  yk11('x',ra,s,D-280,D-180,70,UP,nm+' – par prozora pozadi');yz34('x',ra,s,D-230,CY,nm+' – pozadi');
+});
+
+// desni bok (raspored sa fotografije 2)
+{const fa=W+INS,nm='desni bok',CYR=(SL+H1+72)/2;
+  yk11('x',fa,1,110,218,72,UP,nm+' – par prozora napred');yz34('x',fa,1,164,CYR,nm+' – napred');
+  yk11('x',RM,1,429,507,SL-120,UP,nm+' – mali prozori na ispustu');yz34('x',RM,1,468,CYR,nm+' – između malih prozora na ispustu');
+  yk11('x',fa,1,764,872,72,UP,nm+' – par prozora pozadi');yz34('x',fa,1,818,CYR,nm+' – pozadi');}
+
+/* ===== STAKLENE OGRADE (≈70 cm) ===== */
+{const GL=new THREE.MeshPhysicalMaterial({color:0xcfe3e6,transparent:true,opacity:.28,roughness:.05,metalness:0,side:THREE.DoubleSide,depthWrite:false});
+ const AL=new THREE.MeshStandardMaterial({color:0x8d9094,roughness:.4,metalness:.6});
+ const gb=(x0,x1,y0,y1,z0,z1,m)=>{const g=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0),m);g.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2);g.userData.info={t:'Staklena ograda',d:'kaljeno staklo, visina 70 cm'};pick.push(g);root.add(g);};
+ const FL=H1+13,GH=70, cz0=-320-INS+CI, cxL=PX0-INS+CI, cxR=PX1+INS-CI;
+ // terasa: front između stubova + dve bočne strane od stuba do zida
+ gb(cxL+CS,cxR-CS,FL,FL+GH,cz0+3,cz0+4.2,GL);gb(cxL+CS,cxR-CS,FL+GH-2,FL+GH,cz0+2.5,cz0+4.7,AL);
+ [cxL+3,cxR-4.2].forEach(x=>{gb(x,x+1.2,FL,FL+GH,cz0+CS,-INS,GL);gb(x-0.5,x+1.7,FL+GH-2,FL+GH,cz0+CS,-INS,AL);});
+ // francuski balkoni ispred gornjih prozora spreda
+ [[180,288],[W-288,W-180]].forEach(([u0,u1])=>{const y0=H1+72;
+   gb(u0-4,u1+4,y0,y0+GH,-INS-11,-INS-9.8,GL);gb(u0-4,u1+4,y0+GH-2,y0+GH,-INS-11.5,-INS-9.3,AL);});}
+
+/* ===== SPECIFIKACIJA (automatski iz modela) ===== */
+function bars(list){const p=[];let full=0;list.forEach(l=>{full+=Math.floor(l/200);const r=l%200;if(r>0.5)p.push(r);});
+  p.sort((a,b)=>b-a);const bins=[];p.forEach(l=>{const b=bins.find(x=>x+l<=200);b!==undefined?bins[bins.indexOf(b)]+=l:bins.push(l);});return full+bins.length;}
+{const DIM={'YPP-9':'45 × 10','Y-ploča 4':'31,5 × 4,5','YP-3':'15 × 7,5','YZ-37':'53 × 100 × 5'};
+ const f=x=>x.toLocaleString('sr-RS',{maximumFractionDigits:1});
+ document.getElementById('bom').innerHTML=Object.keys(DIM).map(k=>{const L=BOM[k]||[];
+  if(k==='YZ-37')return `<tr><td>${k}</td><td>${DIM[k]}</td><td class="n">${L.length} kom</td><td class="n">${L.length} kom</td></tr>`;
+  const net=L.reduce((a,b)=>a+b,0)/100,n=bars(L);
+  return `<tr><td>${k}</td><td>${DIM[k]}</td><td class="n">${f(net)} m´</td><td class="n">${n*2} m´ (${n} kom)</td></tr>`;}).join('');}
+
+/* ===== PALETE BOJA ===== */
+const PAL=[[0xdccaaf,0xf3ebdd],[0xc8c1b5,0xf5f2ec],[0xf1ebe1,0xcdb48e]];
+document.getElementById('pal').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('[data-p]').forEach(x=>x.classList.toggle('on',x===b));
+  const [f,m]=PAL[+b.dataset.p];M.ets.color.setHex(f);M.mold.color.setHex(m);MM.color.setHex(m);});
+
+/* ===== POGLEDI ===== */
+const C=new THREE.Vector3(648,330,-450);
+const V={iso:[2400,1500,1700],front:[648,420,2300],right:[3200,420,-450],left:[-1900,420,-450],back:[648,420,-3000],top:[648,3600,-449]};
+let anim=null;
+function go(v){const to=new THREE.Vector3(...V[v]),from=cam.position.clone(),t0=performance.now();
+  const red=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  anim=n=>{const k=red?1:Math.min(1,(n-t0)/700),e=k<.5?2*k*k:1-((-2*k+2)**2)/2;cam.position.lerpVectors(from,to,e);ctl.target.copy(C);if(k>=1)anim=null;};}
+cam.position.set(...V.iso);ctl.target.copy(C);
+document.getElementById('views').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.id==='tglm'){const on=!b.classList.contains('on');b.classList.toggle('on',on);molds.visible=on;return;}
+  if(b.id==='tgl'){const on=!b.classList.contains('on');b.classList.toggle('on',on);labels.forEach(l=>l.visible=on);return;}
+  document.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('on',x===b));go(b.dataset.v);
+});
+
+/* ===== IZBOR ELEMENTA ===== */
+const rc=new THREE.Raycaster(),mv=new THREE.Vector2(),info=document.getElementById('info');
+let sel=null,selMat=null,down=null;
+cv.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);
+cv.addEventListener('pointerup',e=>{
+  if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;
+  const r=cv.getBoundingClientRect();mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
+  rc.setFromCamera(mv,cam);const h=rc.intersectObjects(pick,false)[0];
+  if(sel){sel.material=selMat;sel=null;}
+  if(h){sel=h.object;selMat=sel.material;sel.material=M.hi;
+    info.innerHTML=`<b>${sel.userData.info.t}</b><span class="k">${sel.userData.info.d}</span>`;}
+});
+
+function size(){const w=innerWidth,h=innerHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();}
+const ro=new ResizeObserver(size);ro.observe(document.body);size();
+R.setAnimationLoop(n=>{if(anim)anim(n);ctl.update();R.render(S,cam);});
+}
+</script>
+</body>
+</html>
